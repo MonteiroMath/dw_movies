@@ -1,72 +1,62 @@
-'''
-- IMDbMovies
-  - Title
-  - Summary
-  - Director
-  - writer
-  - main genres
-  - adult rating
-  - release year
-  - runtime
-  - budget
-  - grossUSCA
-  - grossWorld
-  - openingUSCA
-  - openingWorld
+import datetime
+import pandas as pd
+from unidecode import unidecode
+
+from airflow.decorators import dag, task
+from airflow.datasets import Dataset
 
 
-- title-basics
-  - tconst (id)
-  - titleType
-  - primaryTitle
-  - originalTitle
-  - runtime
-  - genres
+@dag(dag_id="MOVIES_ETL",
+     description="Movies data ETL process for a datawarehouse project",
+     start_date=datetime.datetime(2025, 5, 1),
+     tags=['Movies'],
+     dag_display_name='Movies_ETC',
+     schedule=None)
+def etl():
+    def extract_IMDB():
+        # extract data from the IMDB dataset
+        pass
 
-  -> filter movie and tvMovie, keep all data
+    def extract_title_basics():
+        # extract data from the tmdb dataset
+        pass
 
-- title-crew
-  - tconst
-  - directors
-  - writers
+    def extract_TMDB():
+        # extract data from the TMDB dataset
+        pass
 
-  -> keep tconst and directors
+    def extract_actors():
+        # extract data from the TMDB_celebs dataset
+        pass
 
-- title-principals
-  - People that worked in the movie. 
-  -> Filter with category = actor and pick tconst and nconst?
+    def extract_directors():
+        # extract data from the TMDB_celebs dataset
+        pass
 
-- title-ratings
-  - tconst
-  - averageRating
-  - numVotes
+    def transform_movies():
+        # clean data from movies. Should create a function for each dataset?
+        pass
 
-  -> keep all columns, use tconst to merge
+    def merge_movies():
+        # merge movies datasets
+        pass
 
-- names-basic
-  - nconst (id)
-  - primary name
-  - birthYear
-  - deathYear
-  - primaryProfession, know ForTitles (discard?)
+    def transform_directors():
+        # clean data from directors
+        pass
 
-  - maybe use the tcelebs instead ffor actors? More personal data
+    def merge_directors():
+        # merge directors with movies
+        pass
 
-- actors (TMDB - celebs)
+    def transform_actors():
+        # clean data from actors
+        pass
 
-  - lots of data
-  -> get name, birthday, deathday, gender (1-female, 2-male), place_of_birth, discard the rest
-  -> how to merge with the others? using name as the merge prop and names-basic as a bridge? Will get very messy
+    def merge_actors():
+        # merge actors with movies
+        pass
 
-- directors
-  - name
-  - date of birth
-  - date of death
-  - place of birth
-  - gender
-
-  -> merge by name?
-
-
-
-'''
+    def load_data():
+        # write data out to a single csv file
+        pass

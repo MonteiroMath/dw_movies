@@ -17,7 +17,7 @@ TMDB_DATASET_PATH = './data/TMDB_movie_dataset_v11.csv'
      dag_display_name='Movies_ETC',
      schedule=None)
 def etl():
-    
+
     @task(task_id='extract_imdb')
     def extract_IMDB() -> pd.DataFrame:
         # extract data from the IMDB dataset
@@ -58,10 +58,34 @@ def etl():
         # extract data from the TMDB_celebs dataset
         pass
 
-    @task(task_id='transform_imdb')
-    def transform_IMDB_movies(dataframe=pd.DataFrame) -> pd.DataFrame:
-        # clean data from IMDB movies.
+    @task(task_id='merge_movies')
+    def merge_movies(df1=pd.DataFrame, df2=pd.DataFrame) -> pd.DataFrame:
+        # merge movies datasets
+        imdb_df = df1
+        tmdb_df = df2
+
+        df = pd.merge(imdb_df, tmdb_df, on='title', how='left')
+
+        return df
+
+    @task(task_id='transform_movies')
+    def transform_movies(dataframe=pd.DataFrame) -> pd.DataFrame:
+        # clean data from movies.
         df = dataframe
+
+        # split release date
+
+        df['release_date'] = df['release_date'].fillna(
+            pd.to_datetime('1900-01-01'))
+
+        df['release_date'] = df['release_date'].apply(
+            lambda x: pd.to_datetime(x))
+        df['release_day'] = df['release_date'].dt.day.astype('Int64')
+        df['release_month'] = df['release_date'].dt.month.astype('Int64')
+        df['release_year'] = df['release_date'].dt.year.astype('Int64')
+
+        df[['release_day', 'release_month', 'release_year']] = df[[
+            'release_day', 'release_month', 'release_year']].replace({1900: np.nan})
 
         # split director strings and replicate rows when there is more than one director
         try:
@@ -77,24 +101,6 @@ def etl():
         except:
             pass
 
-        return df
-
-    @task(task_id='transform_tmdb')
-    def transform_TMDB_movies(dataframe=pd.DataFrame) -> pd.DataFrame:
-        # clean data from TMDB movies.
-
-        df = dataframe
-
-        # split release date
-        try:
-            df['release_date'] = df['release_date'].apply(
-                lambda x: pd.to_datetime(x, dayfirst=True))
-            df['release_day'] = df['release_date'].apply(lambda x: x.day)
-            df['release_month'] = df['release_date'].apply(lambda x: x.month)
-            df['release_year'] = df['release_date'].apply(lambda x: x.year)
-        except:
-            pass
-
          # split production country strings and replicate rows when there is more than one production country
         try:
             df['production_country'] = df['production_country'].str.split(',')
@@ -102,16 +108,6 @@ def etl():
         except:
             pass
 
-        return df
-
-    @task(task_id='merge_movies')
-    def merge_movies(df1=pd.DataFrame, df2=pd.DataFrame) -> pd.DataFrame:
-        # merge movies datasets
-        imdb_df = df1
-        tmdb_df = df2
-    
-        df = pd.merge(imdb_df, tmdb_df, on='title', how='left')
-    
         return df
 
     @task(task_id='transform_directors')

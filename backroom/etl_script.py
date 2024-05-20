@@ -21,14 +21,29 @@ def etl():
     @task(task_id='extract_imdb')
     def extract_IMDB() -> pd.DataFrame:
         # extract data from the IMDB dataset
+
+        # list of columns to mantain
         columns = ['Title', 'Summary', 'Director', 'Main Genres', 'Motion Picture Rating',
-                   'Runtime (Minutes)', 'Rating (Out of 10)', 'Number of Ratings (in thousands)',
-                   'Budget (in millions)', 'Gross in US & Canada (in millions)', 'Gross worldwide (in millions)',
-                   'Opening Weekend in US & Canada', 'Gross Opening Weekend (in millions)']
+                   'Runtime (Minutes)', 'Rating (Out of 10)', 'Number of Ratings (in thousands)', 'Budget (in millions)',
+                   'Gross in US & Canada (in millions)', 'Gross worldwide (in millions)', 'Gross Opening Weekend (in millions)', 'Release Year']
 
         df = pd.read_csv(IMDB_DATASET_PATH, sep=',',
                          encoding='utf-8', usecols=columns)
 
+        # rename some columns
+        df.rename(columns={
+            'Motion Picture Rating': 'parental_rating',
+            'Runtime (Minutes)': 'runtime',
+            'Rating (Out of 10)': 'rating',
+            'Number of Ratings (in thousands)': 'rating_num',
+            'Budget (in millions)': 'budget',
+            'Gross in US & Canada (in millions)': 'gross_usca',
+            'Gross worldwide (in millions)': 'gross_world',
+            'Gross Opening Weekend (in millions)': 'gross_opening',
+            'Release Year': 'release_year'
+        }, inplace=True)
+
+        # clean column names
         df.rename(mapper=(lambda x: unidecode(
             x.replace(' ', '_').lower())), axis=1, inplace=True)
 
@@ -43,9 +58,16 @@ def etl():
         df = pd.read_csv(TMDB_DATASET_PATH, sep=',',
                          encoding='utf-8', usecols=columns)
 
+        df.rename(
+            columns={'production_countries': 'production_country'}, inplace=True)
+
+        # clean column names
         df.rename(mapper=(lambda x: unidecode(
             x.replace(' ', '_').lower())), axis=1, inplace=True)
 
+        df['release_date'] = df['release_date'].apply(
+            lambda x: pd.to_datetime(x))
+        df['release_year'] = df['release_date'].apply(lambda x: x.year)
         return df
 
     @task(task_id='extract_actors')
@@ -101,7 +123,7 @@ def etl():
         except:
             pass
 
-         # split production country strings and replicate rows when there is more than one production country
+            # split production country strings and replicate rows when there is more than one production country
         try:
             df['production_country'] = df['production_country'].str.split(',')
             df = df.explode('production_country')

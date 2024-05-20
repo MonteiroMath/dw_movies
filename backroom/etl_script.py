@@ -8,6 +8,7 @@ from airflow.datasets import Dataset
 
 IMDB_DATASET_PATH = './data/IMDbMovies-Clean.csv'
 TMDB_DATASET_PATH = './data/TMDB_movie_dataset_v11.csv'
+DIRECTORS_DATASET_PATH = './data/directors.csv'
 
 
 @dag(dag_id="MOVIES_ETL",
@@ -77,8 +78,23 @@ def etl():
 
     @task(task_id='directors')
     def extract_directors():
-        # extract data from the TMDB_celebs dataset
-        pass
+        # extract data from the directors dataset
+        columns = ['itemLabel', 'genderLabel', 'dateOfBirth',
+                   'placeOfBirthLabel', 'dateOfDeath']
+
+        df = pd.read_csv(DIRECTORS_DATASET_PATH, sep=',',
+                         encoding='utf-8', usecols=columns)
+
+        # rename some columns
+        df.rename(columns={
+            'itemLabel': 'director',
+            'genderLabel': 'gender',
+            'dateOfBirth': 'director_birth_date',
+            'placeOfBirthLabel': 'director_birth_place',
+            'dateOfDeath': 'director_death_date',
+        }, inplace=True)
+
+        return df
 
     @task(task_id='merge_movies')
     def merge_movies(df1=pd.DataFrame, df2=pd.DataFrame) -> pd.DataFrame:

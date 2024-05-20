@@ -149,9 +149,28 @@ def etl():
         return df
 
     @task(task_id='transform_directors')
-    def transform_directors():
+    def transform_directors(dataframe=pd.DataFrame) -> pd.DataFrame:
         # clean data from directors
-        pass
+        df = dataframe
+
+        # switch birth_date for birth_year
+        try:
+            df['director_birth_year'] = df['director_birth_date'].apply(
+                lambda x: pd.to_datetime(x).dt.year.astype(int))
+        except:
+            pass
+
+        # switch death_date for death_year
+        try:
+            df['director_death_year'] = df['director_death_date'].apply(
+                lambda x: pd.to_datetime(x).dt.year.astype(int))
+        except:
+            pass
+
+        # drop birth_date and death_date
+        df = df.drop(columns=['director_birth_date', 'director_death_date'])
+
+        return df
 
     @task(task_id='merge_directors')
     def merge_directors():

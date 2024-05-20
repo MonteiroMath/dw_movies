@@ -105,9 +105,14 @@ def etl():
         return df
 
     @task(task_id='merge_movies')
-    def merge_movies():
+    def merge_movies(df1=pd.DataFrame, df2=pd.DataFrame) -> pd.DataFrame:
         # merge movies datasets
-        pass
+        imdb_df = df1
+        tmdb_df = df2
+    
+        df = pd.merge(imdb_df, tmdb_df, on='title', how='left')
+    
+        return df
 
     @task(task_id='transform_directors')
     def transform_directors():

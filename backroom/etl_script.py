@@ -9,8 +9,8 @@ from airflow.datasets import Dataset
 IMDB_DATASET_PATH = './data/IMDbMovies-Clean.csv'
 TMDB_DATASET_PATH = './data/TMDB_movie_dataset_v11.csv'
 DIRECTORS_DATASET_PATH = './data/directors.csv'
-ACTORS_DATASET_PATH = './data/name.basics.tsv'
-
+PEOPLE_DATASET_PATH = './data/name.basics.tsv'
+TITLE_PRINCIPALS_PATH = './data/title.principals.tsv'
 
 @dag(dag_id="MOVIES_ETL",
      description="Movies data ETL process for a datawarehouse project",
@@ -72,13 +72,22 @@ def etl():
         df['release_year'] = df['release_date'].apply(lambda x: x.year)
         return df
 
-    @task(task_id='extract_actors')
-    def extract_actors():
-        # extract data from the TMDB_celebs dataset
+    @task(task_id='extract_title_principals')
+    def extract_title_principals() -> pd.DataFrame:
+        columns = ['tconst', 'nconst', 'category']
+        df = pd.read_csv(TITLE_PRINCIPALS_PATH, sep='\t',
+                         encoding='utf-8', usecols=columns)
+
+        df = df[df['category'].isin(['director', 'actor', 'actress'])]
+
+        return df
+    
+    def extract_people(task_id='extract_people'):
+        # extract data from the names.basics dataset
 
         columns = ['nconst', 'primaryName', 'birthYear', 'deathYear']
-    
-        df = pd.read_csv(ACTORS_DATASET_PATH, sep='\t',
+
+        df = pd.read_csv(PEOPLE_DATASET_PATH, sep='\t',
                          encoding='utf-8', usecols=columns)
         # rename columns
         df.rename(columns={
@@ -86,7 +95,16 @@ def etl():
             'birthYear': 'birth_year',
             'deathYear': 'death_year',
         }, inplace=True)
-    
+
+        return df
+
+    @task(task_id='extract_actors')
+    def extract_actors(peopleDF=pd.DataFrame, principalsDF=pd.DataFrame) -> pd.DataFrame:
+        # extract data from the TMDB_celebs dataset
+
+        df = principalsDF[principalsDF['category'].isin(['actor', 'actress'])]
+        df = pd.merge(df, peopleDF, on='nconst', how='left')
+
         return df
 
     @task(task_id='directors')

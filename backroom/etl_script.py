@@ -154,18 +154,17 @@ def etl():
         df = dataframe
 
         # switch birth_date for birth_year
-        try:
-            df['director_birth_year'] = df['director_birth_date'].apply(
-                lambda x: pd.to_datetime(x).dt.year.astype(int))
-        except:
-            pass
+        df.dropna(subset=['director_birth_date'], inplace=True)
+        df['director_birth_date'] = df['director_birth_date'].apply(
+            lambda x: pd.to_datetime(x))
+        df['director_birth_year'] = df['director_birth_date'].dt.year.astype(
+            int)
 
         # switch death_date for death_year
-        try:
-            df['director_death_year'] = df['director_death_date'].apply(
-                lambda x: pd.to_datetime(x).dt.year.astype(int))
-        except:
-            pass
+        df['director_death_date'] = df['director_death_date'].apply(
+            lambda x: pd.to_datetime(x))
+        df['director_death_year'] = df['director_death_date'].dt.year.astype(
+            int, errors='ignore')
 
         # drop birth_date and death_date
         df = df.drop(columns=['director_birth_date', 'director_death_date'])
@@ -175,7 +174,12 @@ def etl():
     @task(task_id='merge_directors')
     def merge_directors():
         # merge directors with movies
-        pass
+        directors_df = df1
+        movies_df = df2
+
+        df = pd.merge(movies_df, directors_df, on='director', how='left')
+
+        return df
 
     @task(task_id='transform_Actors')
     def transform_actors():

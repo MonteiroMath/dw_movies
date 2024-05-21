@@ -12,6 +12,7 @@ DIRECTORS_DATASET_PATH = './data/directors.csv'
 PEOPLE_DATASET_PATH = './data/name.basics.tsv'
 TITLE_PRINCIPALS_PATH = './data/title.principals.tsv'
 
+
 @dag(dag_id="MOVIES_ETL",
      description="Movies data ETL process for a datawarehouse project",
      start_date=datetime.datetime(2025, 5, 1),
@@ -81,7 +82,7 @@ def etl():
         df = df[df['category'].isin(['director', 'actor', 'actress'])]
 
         return df
-    
+
     def extract_people(task_id='extract_people'):
         # extract data from the names.basics dataset
 
@@ -215,17 +216,21 @@ def etl():
     def transform_actors(actorsDF=pd.DataFrame) -> pd.DataFrame:
         # clean data from actors
         df = actorsDF
-        df['gender'] = df['category'].map({'actor': 'male', 'actress': 'female'})
+        df['gender'] = df['category'].map(
+            {'actor': 'male', 'actress': 'female'})
         df = df.drop('category', axis=1)
 
         return df
 
     @task(task_id='merge_actors')
-    def merge_actors():
+    def merge_actors(moviesDF=pd.DataFrame, actorsDF=pd.DataFrame) -> pd.DataFrame:
         # merge actors with movies
-        pass
+
+        df = pd.merge(moviesDF, actorsDF, left_on='imdb_id',
+                      right_on='tconst', how='left')
+        return df
 
     @task(task_id='load_data')
-    def load_data():
+    def load_data(df):
         # write data out to a single csv file
-        pass
+        df.to_csv('output.csv', index=False, sep=';')

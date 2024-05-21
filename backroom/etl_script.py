@@ -9,6 +9,7 @@ from airflow.datasets import Dataset
 IMDB_DATASET_PATH = './data/IMDbMovies-Clean.csv'
 TMDB_DATASET_PATH = './data/TMDB_movie_dataset_v11.csv'
 DIRECTORS_DATASET_PATH = './data/directors.csv'
+ACTORS_DATASET_PATH = './data/name.basics.tsv'
 
 
 @dag(dag_id="MOVIES_ETL",
@@ -74,7 +75,19 @@ def etl():
     @task(task_id='extract_actors')
     def extract_actors():
         # extract data from the TMDB_celebs dataset
-        pass
+
+        columns = ['nconst', 'primaryName', 'birthYear', 'deathYear']
+    
+        df = pd.read_csv(ACTORS_DATASET_PATH, sep='\t',
+                         encoding='utf-8', usecols=columns)
+        # rename columns
+        df.rename(columns={
+            'primaryName': 'name',
+            'birthYear': 'birth_year',
+            'deathYear': 'death_year',
+        }, inplace=True)
+    
+        return df
 
     @task(task_id='directors')
     def extract_directors():

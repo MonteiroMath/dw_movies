@@ -212,10 +212,13 @@ def etl():
 
         return df
 
-    @task(task_id='transform_Actors')
-    def transform_actors():
+    def transform_actors(actorsDF=pd.DataFrame) -> pd.DataFrame:
         # clean data from actors
-        pass
+        df = actorsDF
+        df['gender'] = df['category'].map({'actor': 'male', 'actress': 'female'})
+        df = df.drop('category', axis=1)
+
+        return df
 
     @task(task_id='merge_actors')
     def merge_actors():

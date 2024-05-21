@@ -88,7 +88,7 @@ def etl():
         # rename some columns
         df.rename(columns={
             'itemLabel': 'director',
-            'genderLabel': 'gender',
+            'genderLabel': 'director_gender',
             'dateOfBirth': 'director_birth_date',
             'placeOfBirthLabel': 'director_birth_place',
             'dateOfDeath': 'director_death_date',

@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
 from unidecode import unidecode
+import numpy as np
 
 from airflow.decorators import dag, task
 from airflow.datasets import Dataset
@@ -15,9 +16,9 @@ TITLE_PRINCIPALS_PATH = './data/title.principals.tsv'
 
 @dag(dag_id="MOVIES_ETL",
      description="Movies data ETL process for a datawarehouse project",
-     start_date=datetime.datetime(2025, 5, 1),
+     start_date=datetime.datetime(2024, 5, 1),
      tags=['Movies'],
-     dag_display_name='Movies_ETC',
+     dag_display_name='Movies_ETL',
      schedule=None)
 def etl():
 
@@ -50,6 +51,7 @@ def etl():
         df.rename(mapper=(lambda x: unidecode(
             x.replace(' ', '_').lower())), axis=1, inplace=True)
 
+        df = df[df['release_year'] > 2022]
         return df
 
     @task(task_id='extract_tmdb')
@@ -79,11 +81,13 @@ def etl():
         df = pd.read_csv(TITLE_PRINCIPALS_PATH, sep='\t',
                          encoding='utf-8', usecols=columns)
 
-        df = df[df['category'].isin(['director', 'actor', 'actress'])]
+        actorsDF = df[df['category'].isin(['actor', 'actress'])]
+        # directorsDF = df[df['category'].isin(['director'])]
 
-        return df
+        return actorsDF
 
-    def extract_people(task_id='extract_people'):
+    @task(task_id='extract_people')
+    def extract_people():
         # extract data from the names.basics dataset
 
         columns = ['nconst', 'primaryName', 'birthYear', 'deathYear']
@@ -100,11 +104,10 @@ def etl():
         return df
 
     @task(task_id='extract_actors')
-    def extract_actors(peopleDF=pd.DataFrame, principalsDF=pd.DataFrame) -> pd.DataFrame:
+    def extract_actors(peopleDF=pd.DataFrame, actorsDF=pd.DataFrame) -> pd.DataFrame:
         # extract data from the TMDB_celebs dataset
 
-        df = principalsDF[principalsDF['category'].isin(['actor', 'actress'])]
-        df = pd.merge(df, peopleDF, on='nconst', how='left')
+        df = pd.merge(actorsDF, peopleDF, on='nconst', how='left')
 
         return df
 
@@ -175,6 +178,7 @@ def etl():
         try:
             df['production_country'] = df['production_country'].str.split(',')
             df = df.explode('production_country')
+            df['production_country'] = df['production_country'].str.strip()
         except:
             pass
 
@@ -204,7 +208,7 @@ def etl():
         return df
 
     @task(task_id='merge_directors')
-    def merge_directors():
+    def merge_directors(df1=pd.DataFrame, df2=pd.DataFrame) -> pd.DataFrame:
         # merge directors with movies
         directors_df = df1
         movies_df = df2
@@ -213,6 +217,7 @@ def etl():
 
         return df
 
+    @task(task_id='transform_actors')
     def transform_actors(actorsDF=pd.DataFrame) -> pd.DataFrame:
         # clean data from actors
         df = actorsDF
@@ -227,10 +232,33 @@ def etl():
         # merge actors with movies
 
         df = pd.merge(moviesDF, actorsDF, left_on='imdb_id',
-                      right_on='tconst', how='left')
+                      right_on='tconst', suffixes=['_director', '_actor'], how='left')
         return df
 
     @task(task_id='load_data')
     def load_data(df):
         # write data out to a single csv file
-        df.to_csv('output.csv', index=False, sep=';')
+        df.to_csv('/home/matheus/Code/fac/current/dw/tf/output.csv',
+                  index=False, sep=';')
+
+    # extract and transform movies
+    df = extract_IMDB()
+    tmdb = extract_TMDB()
+    df = merge_movies(df, tmdb)
+    df = transform_movies(df)
+
+    # extract, transform directors
+    directors = extract_directors()
+    directors = transform_directors(directors)
+    df = merge_directors(directors, df)
+
+    # extract, transform actors
+    actors = extract_title_principals()
+    people = extract_people()
+    actors = extract_actors(people, actors)
+    actors = transform_actors(actors)
+    df = merge_actors(df, actors)
+    load_data(df)
+
+
+etl()

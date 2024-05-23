@@ -127,7 +127,9 @@ def etl():
         imdb_df = df1
         tmdb_df = df2
 
-        df = pd.merge(imdb_df, tmdb_df, on='title', how='left')
+        imdb_df['release_year'] = imdb_df['release_year'].astype('Int64')
+        df = pd.merge(imdb_df, tmdb_df, on=[
+                      'title', 'release_year'], how='inner')
 
         return df
 
@@ -151,26 +153,17 @@ def etl():
             'release_day', 'release_month', 'release_year']].replace({1900: np.nan})
 
         # split director strings and replicate rows when there is more than one director
-        try:
-            df['director'] = df['director'].str.split(',')
-            df = df.explode('director')
-        except:
-            pass
+        df['director'] = df['director'].str.split(',')
+        df = df.explode('director')
 
         # split genre strings and replicate rows when there is more than one genre
-        try:
-            df['main_genres'] = df['main_genres'].str.split(',')
-            df = df.explode('main_genres')
-        except:
-            pass
+        df['main_genres'] = df['main_genres'].str.split(',')
+        df = df.explode('main_genres')
 
-            # split production country strings and replicate rows when there is more than one production country
-        try:
-            df['production_country'] = df['production_country'].str.split(',')
-            df = df.explode('production_country')
-            df['production_country'] = df['production_country'].str.strip()
-        except:
-            pass
+        # split production country strings and replicate rows when there is more than one production country
+        df['production_country'] = df['production_country'].str.split(',')
+        df = df.explode('production_country')
+        df['production_country'] = df['production_country'].str.strip()
 
         df['movie_id'] = np.arange(len(df))
         df['date_id'] = np.arange(len(df))
@@ -258,6 +251,23 @@ def etl():
     def load_time_dim(df=pd.DataFrame):
         df.to_csv(
             'dim_time.csv', index=False, sep=';')
+        
+    @task(task_id='prepare_fact_table')
+    def prepare_fact_table(df):
+        fact = df[['movie_id', 'id_director', 'id_actor', 'date_id', 'runtime', 'rating',
+                   'rating_num', 'budget', 'gross_usca', 'gross_world', 'gross_opening']]
+
+        fact.rename(columns={
+            'id_director': 'director_id',
+            'id_actor': 'actor_id'
+        }, inplace=True)
+
+        return fact
+
+    @task(task_id='load_fact_dim')
+    def load_fact_table(df):
+        df.to_csv(
+            'fact_table.csv', index=False, sep=';')
 
     @task(task_id='load_data')
     def load_data(df):
@@ -269,25 +279,37 @@ def etl():
     imdb = extract_IMDB()
     tmdb = extract_TMDB()
     movies = merge_movies(imdb, tmdb)
+    del imdb, tmdb
     movies_tf = transform_movies(movies)
+    del movies
     movies_dim = prepare_movies_dim(movies_tf)
     load_movies_dim(movies_dim)
+    del movies_dim
+
     time_dim = prepare_time_dim(movies_tf)
     load_time_dim(time_dim)
+    del time_dim
 
     # extract, transform directors
     directors = extract_directors()
     directors_gender = extract_directors_gender()
     directors_transformed = transform_directors(directors, directors_gender)
+    del directors, directors_gender
     load_directors_dim(directors_transformed)
-    movies_with_directors = merge_directors(directors_transformed, movies)
+    dfwithdirectors = merge_directors(directors_transformed, movies_tf)
+    del directors_transformed
 
     # extract, transform actors
     actors = extract_actors()
     actors = transform_actors(actors)
     load_actors_dim(actors)
-    movies_full = merge_actors(movies_with_directors, actors)
-    load_data(movies_full)
+    dfwithactors = merge_actors(dfwithdirectors, actors)
+    del actors, dfwithdirectors
+
+    fact = prepare_fact_table(dfwithactors)
+    load_fact_table(fact)
+    del fact
+    load_data(dfwithactors)
 
 
 etl()

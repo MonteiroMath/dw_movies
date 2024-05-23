@@ -210,6 +210,12 @@ def etl():
                       right_on='tconst', suffixes=['_director', '_actor'], how='left')
         return df
 
+    @task(task_id='load_actors_dim')
+    def load_actors_dim(df):
+
+        df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
+            'dim_actors.csv', index=False, sep=';')
+
     @task(task_id='load_data')
     def load_data(df):
         # write data out to a single csv file
@@ -230,7 +236,8 @@ def etl():
 
     # extract, transform actors
     actors = extract_actors()
-    #actors = transform_actors(actors)
+    actors = transform_actors(actors)
+    load_actors_dim(actors)
     movies_full = merge_actors(movies_with_directors, actors)
     load_data(movies_full)
 

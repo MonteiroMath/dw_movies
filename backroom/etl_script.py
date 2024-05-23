@@ -246,6 +246,19 @@ def etl():
         unique_df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
             'dim_directors.csv', index=False, sep=';')
 
+    @task(task_id='prepare_time_dim')
+    def prepare_time_dim(df=pd.DataFrame):
+
+        time_dim = df[['date_id', 'release_day',
+                       'release_month', 'release_day', 'release_date']]
+
+        return time_dim
+
+    @task(task_id='load_time_dim')
+    def load_time_dim(df=pd.DataFrame):
+        df.to_csv(
+            'dim_time.csv', index=False, sep=';')
+
     @task(task_id='load_data')
     def load_data(df):
         # write data out to a single csv file
@@ -256,10 +269,11 @@ def etl():
     imdb = extract_IMDB()
     tmdb = extract_TMDB()
     movies = merge_movies(imdb, tmdb)
-    movies = transform_movies(movies)
-    movies_dim = prepare_movies_dim(movies_dim)
+    movies_tf = transform_movies(movies)
+    movies_dim = prepare_movies_dim(movies_tf)
     load_movies_dim(movies_dim)
-
+    time_dim = prepare_time_dim(movies_tf)
+    load_time_dim(time_dim)
 
     # extract, transform directors
     directors = extract_directors()

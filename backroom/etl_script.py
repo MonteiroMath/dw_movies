@@ -80,19 +80,28 @@ def etl():
     def extract_actors() -> pd.DataFrame:
         # extract data from the actors dataset
 
-        columns = ['tconst', 'name', 'category', 'birth_year', 'death_year']
+        columns = ['tconst', 'nconst', 'name',
+                   'category', 'birth_year', 'death_year']
         df = pd.read_csv(ACTORS_DATASET_PATH, sep=';',
                          encoding='utf-8', usecols=columns)
+
+        df.rename(columns={
+            'nconst': 'id',
+        }, inplace=True)
 
         return df
 
     @task(task_id='extract_directors')
     def extract_directors() -> pd.DataFrame:
         # extract data from the directors dataset
-        columns = ['tconst', 'name', 'birth_year', 'death_year']
+        columns = ['tconst', 'nconst', 'name', 'birth_year', 'death_year']
 
         df = pd.read_csv(DIRECTORS_DATASET_PATH, sep=';',
                          encoding='utf-8', usecols=columns)
+
+        df.rename(columns={
+            'nconst': 'id',
+        }, inplace=True)
 
         return df
 
@@ -170,10 +179,6 @@ def etl():
         # clean data from directors
         df = pd.merge(directorsDF, genderDF, on='name', how='left')
 
-        # add unique identifier to each row
-        df['id'] = range(1, len(df) + 1)
-        df['id'] = df['id'].astype(int)
-
         return df
 
     @task(task_id='merge_directors')
@@ -197,9 +202,6 @@ def etl():
             {'actor': 'male', 'actress': 'female'})
         df = df.drop('category', axis=1)
 
-        # add unique identifier to each row
-        df['id'] = range(1, len(df) + 1)
-        df['id'] = df['id'].astype(int)
         return df
 
     @task(task_id='merge_actors')
@@ -213,8 +215,16 @@ def etl():
     @task(task_id='load_actors_dim')
     def load_actors_dim(df):
 
-        df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
+        unique_df = df.drop_duplicates(subset='id', keep='first')
+        unique_df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
             'dim_actors.csv', index=False, sep=';')
+
+    @task(task_id='load_directors_dim')
+    def load_directors_dim(df):
+
+        unique_df = df.drop_duplicates(subset='id', keep='first')
+        unique_df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
+            'dim_directors.csv', index=False, sep=';')
 
     @task(task_id='load_data')
     def load_data(df):
@@ -232,6 +242,7 @@ def etl():
     directors = extract_directors()
     directors_gender = extract_directors_gender()
     directors_transformed = transform_directors(directors, directors_gender)
+    load_directors_dim(directors_transformed)
     movies_with_directors = merge_directors(directors_transformed, movies)
 
     # extract, transform actors

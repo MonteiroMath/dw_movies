@@ -172,6 +172,9 @@ def etl():
         except:
             pass
 
+        df['movie_id'] = np.arange(len(df))
+        df['date_id'] = np.arange(len(df))
+
         return df
 
     @task(task_id='transform_directors')
@@ -212,15 +215,32 @@ def etl():
                       right_on='tconst', suffixes=['_director', '_actor'], how='left')
         return df
 
+    @task(task_id='prepare_movies_dim')
+    def prepare_movies_dim(df=pd.DataFrame) -> pd.DataFrame:
+        movies_dim = df[['movie_id', 'title', 'summary', 'main_genres', 'original_language',
+                         'production_country', 'parental_rating']]
+
+        movies_dim.rename(columns={
+            'main_genres': 'genre',
+        }, inplace=True)
+
+        return movies_dim
+
+    @task(task_id='load_movies_dim')
+    def load_movies_dim(df=pd.DataFrame):
+
+        df.to_csv(
+            'dim_movies.csv', index=False, sep=';')
+
     @task(task_id='load_actors_dim')
-    def load_actors_dim(df):
+    def load_actors_dim(df=pd.DataFrame):
 
         unique_df = df.drop_duplicates(subset='id', keep='first')
         unique_df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
             'dim_actors.csv', index=False, sep=';')
 
     @task(task_id='load_directors_dim')
-    def load_directors_dim(df):
+    def load_directors_dim(df=pd.DataFrame):
 
         unique_df = df.drop_duplicates(subset='id', keep='first')
         unique_df[['id', 'name', 'gender', 'birth_year', 'death_year']].to_csv(
@@ -237,6 +257,9 @@ def etl():
     tmdb = extract_TMDB()
     movies = merge_movies(imdb, tmdb)
     movies = transform_movies(movies)
+    movies_dim = prepare_movies_dim(movies_dim)
+    load_movies_dim(movies_dim)
+
 
     # extract, transform directors
     directors = extract_directors()

@@ -9,9 +9,10 @@ from airflow.datasets import Dataset
 
 IMDB_DATASET_PATH = './data/IMDbMovies-Clean.csv'
 TMDB_DATASET_PATH = './data/TMDB_movie_dataset_v11.csv'
-DIRECTORS_DATASET_PATH = './data/directors.csv'
-PEOPLE_DATASET_PATH = './data/name.basics.tsv'
-TITLE_PRINCIPALS_PATH = './data/title.principals.tsv'
+IMDB_ORIGINAL_PATH = './data/title.basics.tsv'
+DIRECTORS_GENDER_DATASET_PATH = './data/directors.csv'
+DIRECTORS_DATASET_PATH = './data/directorspermovies.csv'
+ACTORS_DATASET_PATH = './data/actorspermovies.csv'
 
 
 @dag(dag_id="MOVIES_ETL",
@@ -75,58 +76,38 @@ def etl():
         df['release_year'] = df['release_date'].apply(lambda x: x.year)
         return df
 
-    @task(task_id='extract_title_principals')
-    def extract_title_principals() -> pd.DataFrame:
-        columns = ['tconst', 'nconst', 'category']
-        df = pd.read_csv(TITLE_PRINCIPALS_PATH, sep='\t',
-                         encoding='utf-8', usecols=columns)
-
-        actorsDF = df[df['category'].isin(['actor', 'actress'])]
-        # directorsDF = df[df['category'].isin(['director'])]
-
-        return actorsDF
-
-    @task(task_id='extract_people')
-    def extract_people():
-        # extract data from the names.basics dataset
-
-        columns = ['nconst', 'primaryName', 'birthYear', 'deathYear']
-
-        df = pd.read_csv(PEOPLE_DATASET_PATH, sep='\t',
-                         encoding='utf-8', usecols=columns)
-        # rename columns
-        df.rename(columns={
-            'primaryName': 'name',
-            'birthYear': 'birth_year',
-            'deathYear': 'death_year',
-        }, inplace=True)
-
-        return df
-
     @task(task_id='extract_actors')
-    def extract_actors(peopleDF=pd.DataFrame, actorsDF=pd.DataFrame) -> pd.DataFrame:
-        # extract data from the TMDB_celebs dataset
+    def extract_actors() -> pd.DataFrame:
+        # extract data from the actors dataset
 
-        df = pd.merge(actorsDF, peopleDF, on='nconst', how='left')
+        columns = ['tconst', 'name', 'category', 'birth_year', 'death_year']
+        df = pd.read_csv(ACTORS_DATASET_PATH, sep=';',
+                         encoding='utf-8', usecols=columns)
 
         return df
 
-    @task(task_id='directors')
-    def extract_directors():
+    @task(task_id='extract_directors')
+    def extract_directors() -> pd.DataFrame:
         # extract data from the directors dataset
-        columns = ['itemLabel', 'genderLabel', 'dateOfBirth',
-                   'placeOfBirthLabel', 'dateOfDeath']
+        columns = ['tconst', 'name', 'birth_year', 'death_year']
 
-        df = pd.read_csv(DIRECTORS_DATASET_PATH, sep=',',
+        df = pd.read_csv(DIRECTORS_DATASET_PATH, sep=';',
+                         encoding='utf-8', usecols=columns)
+
+        return df
+
+    @task(task_id='extract_director_gender')
+    def extract_directors_gender() -> pd.DataFrame:
+        # extract data from the directors gender dataset
+        columns = ['itemLabel', 'genderLabel']
+
+        df = pd.read_csv(DIRECTORS_GENDER_DATASET_PATH, sep=',',
                          encoding='utf-8', usecols=columns)
 
         # rename some columns
         df.rename(columns={
-            'itemLabel': 'director',
-            'genderLabel': 'director_gender',
-            'dateOfBirth': 'director_birth_date',
-            'placeOfBirthLabel': 'director_birth_place',
-            'dateOfDeath': 'director_death_date',
+            'itemLabel': 'name',
+            'genderLabel': 'gender',
         }, inplace=True)
 
         return df
@@ -185,25 +166,13 @@ def etl():
         return df
 
     @task(task_id='transform_directors')
-    def transform_directors(dataframe=pd.DataFrame) -> pd.DataFrame:
+    def transform_directors(directorsDF=pd.DataFrame, genderDF=pd.DataFrame) -> pd.DataFrame:
         # clean data from directors
-        df = dataframe
+        df = pd.merge(directorsDF, genderDF, on='name', how='left')
 
-        # switch birth_date for birth_year
-        df.dropna(subset=['director_birth_date'], inplace=True)
-        df['director_birth_date'] = df['director_birth_date'].apply(
-            lambda x: pd.to_datetime(x))
-        df['director_birth_year'] = df['director_birth_date'].dt.year.astype(
-            int)
-
-        # switch death_date for death_year
-        df['director_death_date'] = df['director_death_date'].apply(
-            lambda x: pd.to_datetime(x))
-        df['director_death_year'] = df['director_death_date'].dt.year.astype(
-            int, errors='ignore')
-
-        # drop birth_date and death_date
-        df = df.drop(columns=['director_birth_date', 'director_death_date'])
+        # add unique identifier to each row
+        df['id'] = range(1, len(df) + 1)
+        df['id'] = df['id'].astype(int)
 
         return df
 
@@ -213,7 +182,8 @@ def etl():
         directors_df = df1
         movies_df = df2
 
-        df = pd.merge(movies_df, directors_df, on='director', how='left')
+        df = pd.merge(movies_df, directors_df, left_on='imdb_id',
+                      right_on='tconst', how='left')
 
         return df
 
@@ -221,10 +191,15 @@ def etl():
     def transform_actors(actorsDF=pd.DataFrame) -> pd.DataFrame:
         # clean data from actors
         df = actorsDF
+
+        # add the gender column to actors
         df['gender'] = df['category'].map(
             {'actor': 'male', 'actress': 'female'})
         df = df.drop('category', axis=1)
 
+        # add unique identifier to each row
+        df['id'] = range(1, len(df) + 1)
+        df['id'] = df['id'].astype(int)
         return df
 
     @task(task_id='merge_actors')
@@ -242,23 +217,22 @@ def etl():
                   index=False, sep=';')
 
     # extract and transform movies
-    df = extract_IMDB()
+    imdb = extract_IMDB()
     tmdb = extract_TMDB()
-    df = merge_movies(df, tmdb)
-    df = transform_movies(df)
+    movies = merge_movies(imdb, tmdb)
+    movies = transform_movies(movies)
 
     # extract, transform directors
     directors = extract_directors()
-    directors = transform_directors(directors)
-    df = merge_directors(directors, df)
+    directors_gender = extract_directors_gender()
+    directors_transformed = transform_directors(directors, directors_gender)
+    movies_with_directors = merge_directors(directors_transformed, movies)
 
     # extract, transform actors
-    actors = extract_title_principals()
-    people = extract_people()
-    actors = extract_actors(people, actors)
-    actors = transform_actors(actors)
-    df = merge_actors(df, actors)
-    load_data(df)
+    actors = extract_actors()
+    #actors = transform_actors(actors)
+    movies_full = merge_actors(movies_with_directors, actors)
+    load_data(movies_full)
 
 
 etl()
